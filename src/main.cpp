@@ -75,6 +75,13 @@ GLFWwindow* window = nullptr;
 #   define Shape Cube
 #endif
 
+#ifndef RESOURCE_DIR
+	#define RESOURCE_DIR "resources/"
+#endif
+
+#ifndef SHADER_DIR
+	#define SHADER_DIR "shaders/"
+#endif
 
 int main(const int argc, const char* argv[]) {
     std::cout << "Minimal OpenGL 4.1 Example by Morgan McGuire\n\nW, A, S, D, C, Z keys to translate\nMouse click and drag to rotate\nESC to quit\n\n";
@@ -163,7 +170,7 @@ int main(const int argc, const char* argv[]) {
 
     /////////////////////////////////////////////////////////////////////
     // Create the main shader
-    const GLuint shader = createShaderProgram(loadTextFile("min.vrt"), loadTextFile("min.pix"));
+    const GLuint shader = createShaderProgram(loadTextFile(SHADER_DIR "min.vrt"), loadTextFile(SHADER_DIR "min.pix"));
 
     // Binding points for attributes and uniforms discovered from the shader
     const GLint positionAttribute   = glGetAttribLocation(shader,  "position");
@@ -225,7 +232,7 @@ int main(const int argc, const char* argv[]) {
     {
         int textureWidth, textureHeight, channels;
         std::vector<std::uint8_t> data;
-        loadBMP("color.bmp", textureWidth, textureHeight, channels, data);
+        loadBMP(RESOURCE_DIR "color.bmp", textureWidth, textureHeight, channels, data);
 
         glGenTextures(1, &colorTexture);
         glBindTexture(GL_TEXTURE_2D, colorTexture);
