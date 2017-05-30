@@ -68,7 +68,7 @@ void APIENTRY debugCallback(GLenum source, GLenum type, GLuint id, GLenum severi
     }
 }
 
-
+GLuint vao;
 GLFWwindow* initOpenGL(int width, int height, const std::string& title) {
     if (! glfwInit()) {
         fprintf(stderr, "ERROR: could not start GLFW\n");
@@ -117,7 +117,7 @@ GLFWwindow* initOpenGL(int width, int height, const std::string& title) {
     fprintf(stderr, "GPU: %s (OpenGL version %s)\n", glGetString(GL_RENDERER), glGetString(GL_VERSION));
 
     // Bind a single global vertex array (done this way since OpenGL 3)
-    { GLuint vao; glGenVertexArrays(1, &vao); glBindVertexArray(vao); }
+    { glGenVertexArrays(1, &vao); glBindVertexArray(vao); }
 
     // Check for errors
     { const GLenum error = glGetError(); assert(error == GL_NONE); }

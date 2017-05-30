@@ -52,36 +52,42 @@
 // Uncomment to add VR support
 #define _VR
 
-// To switch the box to a teapot, uncomment the following two lines
-//#include "teapot.h"
-//#define Shape Teapot
-
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "matrix.h"
+#include "glm/gtc/matrix_transform.hpp"
 #include "minimalOpenGL.h"
+#include "Shape.h"
+#include "Program.h"
 
 #ifdef _VR
-#   include "minimalOpenVR.h"
+#include "minimalOpenVR.h"
 #endif
 
 GLFWwindow* window = nullptr;
 
 #ifdef _VR
-    vr::IVRSystem* hmd = nullptr;
+vr::IVRSystem* hmd = nullptr;
 #endif
 
-#ifndef Shape
-#   define Shape Cube
-#endif
+using namespace std;
+using namespace glm;
 
-#ifndef RESOURCE_DIR
-	#define RESOURCE_DIR "resources/"
-#endif
+shared_ptr<Program> prog;
 
-#ifndef SHADER_DIR
-	#define SHADER_DIR "shaders/"
-#endif
+extern GLuint vao;
+
+void init() {
+	prog = make_shared<Program>();
+	prog->setShaderNames(SHADER_DIR "phong_vert.glsl", SHADER_DIR "phong_frag.glsl");
+	prog->setVerbose(true);
+	prog->addAttribute("vertPos");
+	prog->addAttribute("vertNor");
+	prog->addAttribute("vertTex");
+	prog->addUniform("P");
+	prog->addUniform("V");
+	prog->init();
+}
 
 int main(const int argc, const char* argv[]) {
     std::cout << "Minimal OpenGL 4.1 Example by Morgan McGuire\n\nW, A, S, D, C, Z keys to translate\nMouse click and drag to rotate\nESC to quit\n\n";
@@ -100,7 +106,7 @@ int main(const int argc, const char* argv[]) {
     const int windowWidth = (framebufferWidth * windowHeight) / framebufferHeight;
 
     window = initOpenGL(windowWidth, windowHeight, "minimalOpenGL");
-        
+	init();
     Vector3 bodyTranslation(0.0f, 1.6f, 5.0f);
     Vector3 bodyRotation;
 
@@ -142,31 +148,31 @@ int main(const int argc, const char* argv[]) {
     GLuint positionBuffer = GL_NONE;
     glGenBuffers(1, &positionBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, positionBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Shape::position), Shape::position, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Cube::position), Cube::position, GL_STATIC_DRAW);
 
     GLuint texCoordBuffer = GL_NONE;
     glGenBuffers(1, &texCoordBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, texCoordBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Shape::texCoord), Shape::texCoord, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Cube::texCoord), Cube::texCoord, GL_STATIC_DRAW);
 
     GLuint normalBuffer = GL_NONE;
     glGenBuffers(1, &normalBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, normalBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Shape::normal), Shape::normal, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Cube::normal), Cube::normal, GL_STATIC_DRAW);
 
     GLuint tangentBuffer = GL_NONE;
     glGenBuffers(1, &tangentBuffer);
     glBindBuffer(GL_ARRAY_BUFFER, tangentBuffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Shape::tangent), Shape::tangent, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Cube::tangent), Cube::tangent, GL_STATIC_DRAW);
 
-    const int numVertices = sizeof(Shape::position) / sizeof(Shape::position[0]);
+    const int numVertices = sizeof(Cube::position) / sizeof(Cube::position[0]);
     (void)numVertices;
 
     GLuint indexBuffer = GL_NONE;
     glGenBuffers(1, &indexBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Shape::index), Shape::index, GL_STATIC_DRAW);
-    const int numIndices = sizeof(Shape::index) / sizeof(Shape::index[0]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(Cube::index), Cube::index, GL_STATIC_DRAW);
+    const int numIndices = sizeof(Cube::index) / sizeof(Cube::index[0]);
 
     /////////////////////////////////////////////////////////////////////
     // Create the main shader
@@ -252,6 +258,13 @@ int main(const int argc, const char* argv[]) {
 #   ifdef _VR
         vr::TrackedDevicePose_t trackedDevicePose[vr::k_unMaxTrackedDeviceCount];
 #   endif
+
+		glBindVertexArray(0);
+		Shape *jelly = new Shape();
+		jelly->loadMesh(RESOURCE_DIR "bunny.obj");
+		jelly->resize();
+		jelly->init();
+		glBindVertexArray(vao);
 
     // Main loop:
     int timer = 0;
@@ -358,6 +371,21 @@ int main(const int argc, const char* argv[]) {
             }
 
             glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_INT, 0);
+
+			glBindVertexArray(0);
+			prog->bind();
+			const Matrix4x4& modelViewProjectionMatrix = projectionMatrix[eye] * cameraToWorldMatrix.inverse() * objectToWorldMatrix;
+			float mvp[16];
+			for (int row = 0; row < 4; row++) {
+				for (int col = 0; col < 4; col++) {
+					mvp[col + row * 4] = modelViewProjectionMatrix.data[row + col * 4];
+				}
+			}
+			glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, modelViewProjectionMatrix.data);
+			jelly->draw(prog);
+			prog->unbind();
+			glBindVertexArray(vao);
+
 #           ifdef _VR
             {
                 const vr::Texture_t tex = { reinterpret_cast<void*>(intptr_t(colorRenderTarget[eye])), vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
