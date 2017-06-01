@@ -11,7 +11,12 @@ out vec3 pos;
 
 void main()
 {
-	gl_Position = P * V * M * vertPos;
+	mat3 rot = transpose(mat3(V));
+	mat4 _V = mat4(rot);
+	_V[0][3] = _V[1][3] = _V[2][3] = 0;
+	_V[3] = V[3];
+
+	gl_Position = P * _V * M * vertPos;
 	pos = vec3(V * M * vertPos);
 	fragNor = (V * M * vec4(vertNor, 0.0)).xyz;
 }

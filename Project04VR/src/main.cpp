@@ -7,9 +7,11 @@
 #include "MatrixStack.h"
 #include "Shape.h"
 
+#define GLM_FORCE_RADIANS
 // value_ptr for glm
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/epsilon.hpp>
 
 #define _VR
 
@@ -91,7 +93,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 {
 	GLfloat cameraSpeed = 0.05f;
 
-	if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, GL_TRUE);
 	}
 
@@ -110,7 +112,7 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	if (key == GLFW_KEY_A) {
 		lookAtVec -= cameraSpeed * camU;
 		eye -= cameraSpeed * camU;
-	} 
+	}
 	if (key == GLFW_KEY_S) {
 		lookAtVec += cameraSpeed * camW;
 		eye += cameraSpeed * camW;
@@ -118,6 +120,9 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
 	if (key == GLFW_KEY_D) {
 		lookAtVec += cameraSpeed * camU;
 		eye += cameraSpeed * camU;
+	}
+	if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+		vr::VRSystem()->ResetSeatedZeroPose();
 	}
 }
 
@@ -142,9 +147,9 @@ static void mouse_callback(GLFWwindow *window, int button, int action, int mods)
 }
 
 static void resize_callback(GLFWwindow *window, int width, int height) {
-   g_width = width;
-   g_height = height;
-   glViewport(0, 0, width, height);
+	g_width = width;
+	g_height = height;
+	glViewport(0, 0, width, height);
 }
 
 static void init()
@@ -376,7 +381,7 @@ static void drawBunny(shared_ptr<MatrixStack> P, mat4 V, shared_ptr<MatrixStack>
 	(*M)->translate(vec3(0.0f, -0.7f, 0.9f));
 	(*M)->scale(vec3(0.1f, 0.1f, 0.1f));
 
-	progF->bind(); 
+	progF->bind();
 	glUniformMatrix4fv(progF->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
 	glUniformMatrix4fv(progF->getUniform("V"), 1, GL_FALSE, value_ptr(V));
 	glUniformMatrix4fv(progF->getUniform("M"), 1, GL_FALSE, value_ptr((*M)->topMatrix()));
@@ -397,7 +402,7 @@ static void drawBunny(shared_ptr<MatrixStack> P, mat4 V, shared_ptr<MatrixStack>
 	progE->unbind();
 }
 
-mat4 eyeToHead[2], projectionMatrix[2], headToBodyMatrix;
+mat4 eyeToHead[2], projectionMatrix[2], headToBodyMatrix, tHeadToBodyMatrix, tProjectionMatrix[2], tEyeToHead[2];
 
 static void render(int neye)
 {
@@ -420,17 +425,21 @@ static void render(int neye)
 	// Apply perspective projection.
 	P->pushMatrix();
 	P->loadIdentity();
-	P->multMatrix(projectionMatrix[neye]);
+	P->multMatrix(tProjectionMatrix[neye]);
 	//P->perspective(45.0f, aspect, 0.01f, 100.0f);
-	lookAtVec = vec3(cos(cameraRot.y) * cos(cameraRot.x), sin(cameraRot.y), cos(cameraRot.y) * cos(3.14f / 2.0f - cameraRot.x)) + eye;
-	gaze = lookAtVec - eye;
+	//lookAtVec = vec3(cos(cameraRot.y) * cos(cameraRot.x), sin(cameraRot.y), cos(cameraRot.y) * cos(3.14f / 2.0f - cameraRot.x)) + eye;
+	//gaze = lookAtVec - eye;
 
-	camW = (-1.0f * gaze) / length(gaze);
-	camU = cross(up, camW) / length(cross(up, camW));
-	camV = cross(camW, camU);
+	//camW = (-1.0f * gaze) / length(gaze);
+	//camU = cross(up, camW) / length(cross(up, camW));
+	//camV = cross(camW, camU);
 
-	V = V * headToBodyMatrix * eyeToHead[neye];
-	//V = eyeToHead[neye] * headToBodyMatrix * V;
+
+	//V = headToBodyMatrix * eyeToHead[neye];
+	V = tEyeToHead[neye] * tHeadToBodyMatrix;
+	float *temp = value_ptr(V);
+	cout << temp[3] << ", " << temp[7] << ", " << temp[11] << ", " << temp[15] << endl;
+	assert(temp[3] == 0 && temp[7] == 0 && temp[11] == 0 && temp[15] == 1);
 	//V = glm::lookAt(eye, lookAtVec, up);
 
 	// Draw a stack of cubes with indiviudal transforms 
@@ -439,10 +448,10 @@ static void render(int neye)
 	glUniformMatrix4fv(progP->getUniform("P"), 1, GL_FALSE, value_ptr(P->topMatrix()));
 	glUniform3f(progP->getUniform("lightColor"), lightColor.x, lightColor.y, lightColor.z);
 	glUniform3f(progP->getUniform("lightPos"), lightPos.x, lightPos.y, lightPos.z);
-	
-	// draw mesh bunnies
 
-	M->pushMatrix();
+	// draw mesh bunnies
+	{
+		M->pushMatrix();
 		SetMaterial(3);
 		M->loadIdentity();
 		M->translate(vec3(5, 0, 0));
@@ -515,23 +524,12 @@ static void render(int neye)
 
 		// draw ground
 		SetMaterial(4);
-		M->translate(vec3(0, -2.4, 0));
+		M->translate(vec3(0, -5, 0));
 		M->scale(vec3(200, .1, 200));
 		glUniformMatrix4fv(progP->getUniform("M"), 1, GL_FALSE, value_ptr(M->topMatrix()));
 		ground->draw(progP);
-
+	}
 	progP->unbind();
-
-	drawBunny(P, V, &M, 34.0f, 17.0f, 0);
-	drawBunny(P, V, &M, -19.0f, -19.0f, 1);
-	drawBunny(P, V, &M, -7.0f, 12.0f, 2);
-	drawBunny(P, V, &M, 36.0f, -10.0f, 3);
-	drawBunny(P, V, &M, 35.0f, -38.0f,0);
-	drawBunny(P, V, &M, 14.0f, 32.0f, 1);
-	drawBunny(P, V, &M, 23.0f, -5.0f, 2);
-	drawBunny(P, V, &M, -23.0f, -27.0f, 3);
-	drawBunny(P, V, &M, -5.0f, 7.0f, 0);
-	drawBunny(P, V, &M, -28.0f, 2.0f, 1);
 
 	M->popMatrix();
 
@@ -551,7 +549,7 @@ static void render(int neye)
 
 int main(int argc, char **argv)
 {
-	if(argc < 2) {
+	if (argc < 2) {
 		cout << "Please specify the resource directory." << endl;
 		return 0;
 	}
@@ -569,18 +567,18 @@ int main(int argc, char **argv)
 	// Set error callback.
 	glfwSetErrorCallback(error_callback);
 	// Initialize the library.
-	if(!glfwInit()) {
+	if (!glfwInit()) {
 		return -1;
 	}
-   //request the highest possible version of OGL - important for mac
-   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+	//request the highest possible version of OGL - important for mac
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
 
 	// Create a windowed mode window and its OpenGL context.
 	window = glfwCreateWindow(framebufferWidth, framebufferHeight, "Project04VR", NULL, NULL);
-	if(!window) {
+	if (!window) {
 		glfwTerminate();
 		return -1;
 	}
@@ -588,24 +586,24 @@ int main(int argc, char **argv)
 	glfwMakeContextCurrent(window);
 	// Initialize GLEW.
 	glewExperimental = true;
-	if(glewInit() != GLEW_OK) {
+	if (glewInit() != GLEW_OK) {
 		cerr << "Failed to initialize GLEW" << endl;
 		return -1;
 	}
 	//weird bootstrap of glGetError
-   glGetError();
-   cout << "OpenGL version: " << glGetString(GL_VERSION) << endl;
-   cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << endl;
+	glGetError();
+	cout << "OpenGL version: " << glGetString(GL_VERSION) << endl;
+	cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << endl;
 
 	// Set vsync.
 	glfwSwapInterval(1);
 	// Set keyboard callback.
 	glfwSetKeyCallback(window, key_callback);
-   //set the mouse call back
-   glfwSetMouseButtonCallback(window, mouse_callback);
-   //set the window resize call back
-   glfwSetFramebufferSizeCallback(window, resize_callback);
-   glfwSetScrollCallback(window, scroll_callback);
+	//set the mouse call back
+	glfwSetMouseButtonCallback(window, mouse_callback);
+	//set the window resize call back
+	glfwSetFramebufferSizeCallback(window, resize_callback);
+	glfwSetScrollCallback(window, scroll_callback);
 
 	// Initialize scene. Note geometry initialized in init now
 	init();
@@ -642,7 +640,7 @@ int main(int argc, char **argv)
 #   endif
 
 	// Loop until the user closes the window.
-	while(!glfwWindowShouldClose(window)) {
+	while (!glfwWindowShouldClose(window)) {
 #ifdef _VR
 		getEyeTransformations(
 			hmd,
@@ -656,11 +654,16 @@ int main(int argc, char **argv)
 			value_ptr(projectionMatrix[1])
 		);
 
-		headToBodyMatrix = transpose(headToBodyMatrix);
-		eyeToHead[0] = transpose(eyeToHead[0]);
-		eyeToHead[1] = transpose(eyeToHead[1]);
-		projectionMatrix[0] = transpose(projectionMatrix[0]);
-		projectionMatrix[1] = transpose(projectionMatrix[1]);
+		assert(all(epsilonEqual(headToBodyMatrix[3], vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.0001f)));
+		assert(all(epsilonEqual(eyeToHead[0][3], vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.0001f)));
+		assert(all(epsilonEqual(eyeToHead[1][3], vec4(0.0f, 0.0f, 0.0f, 1.0f), 0.0001f)));
+
+		tHeadToBodyMatrix = transpose(headToBodyMatrix);
+		tEyeToHead[0] = transpose(eyeToHead[0]);
+		tEyeToHead[1] = transpose(eyeToHead[1]);
+		tProjectionMatrix[0] = transpose(projectionMatrix[0]);
+		tProjectionMatrix[1] = transpose(projectionMatrix[1]);
+
 #else
 		projectionMatrix[0] = perspective(45.0f, (float)framebufferWidth / framebufferHeight, 0.1f, 100.0f);
 #       endif
